@@ -118,7 +118,7 @@ class Parser(pdlparser.PDLParser):
             if val in (0x44, 0x48, 0x41): # if previous endPage or openDataSource or beginSession (first page)
                 break
             if val == 0x26:
-                mediasource = int(minfile[pos - 2])
+                mediasource = minfile[pos - 2]
                 mediasourcelabel = self.mediasources.get(mediasource, str(mediasource))
                 pos -= 4
             elif val == 0x25:
@@ -135,7 +135,7 @@ class Parser(pdlparser.PDLParser):
                     else:
                         # if we just found an ubyte, then the media
                         # size is known by its index
-                        mediasize = int(minfile[pos+1])
+                        mediasize = minfile[pos+1]
                         mediasizelabel = self.mediasizes.get(mediasize, str(mediasize))
                     pos -= 1
                     # self.logdebug("Media size: %s" % mediasizelabel)
@@ -151,7 +151,7 @@ class Parser(pdlparser.PDLParser):
                     val = minfile[pos]
                     pos -= 1
                     if val == 0xc8:
-                        length = self.tags[int(minfile[pos+2])] # will probably always be a byte or uint16
+                        length = self.tags[minfile[pos+2]] # will probably always be a byte or uint16
                         if length == 1:
                             startpos = pos + 4
                             size = unpack("B", self.minfile[pos+3:startpos])[0]
@@ -302,7 +302,7 @@ class Parser(pdlparser.PDLParser):
         """Undocumented tag 0x13 in class 3.0 streams."""
         #self.logdebug("x31 at 0x%08x" % (nextpos-1))
         minfile = self.minfile
-        val = int(minfile[nextpos])
+        val = minfile[nextpos]
         if val == 0x90: # Should we take care of this or not ? It's undocumented after all !
             # BTW we don't know if it's the 0x31 or the 0x90 which counts, since 0x90 is reserved for future use
             try:
@@ -316,10 +316,10 @@ class Parser(pdlparser.PDLParser):
         #self.logdebug("x46 at 0x%08x" % (nextpos-1))
         pos = nextpos - 3
         minfile = self.minfile
-        val = int(minfile[pos])
+        val = minfile[pos]
         while val == 0xf8:
             #self.logdebug("x46 continues at 0x%08x with 0x%02x" % (pos, val))
-            funcid = int(minfile[pos+1])
+            funcid = minfile[pos+1]
             try:
                 offset = self.x46_functions[funcid]
             except KeyError:
@@ -329,7 +329,7 @@ class Parser(pdlparser.PDLParser):
                 #self.logdebug("x46 funcid 0x%02x" % funcid)
                 pos -= offset
                 #self.logdebug("x46 new position 0x%08x" % pos)
-                length = self.tags[int(self.minfile[pos])]
+                length = self.tags[self.minfile[pos]]
                 if isinstance(length, collections.Callable):
                     length = length(pos+1)
                 #self.logdebug("x46 length %i" % length)
@@ -338,7 +338,7 @@ class Parser(pdlparser.PDLParser):
                         return unpack(self.unpackType[length], self.minfile[pos+1:pos+length+1])[0]
                     except KeyError:
                         raise pdlparser.PDLParserError("Error on size '%s' at %x" % (length, pos+1))
-            val = int(minfile[pos])
+            val = minfile[pos]
         return 0
 
     def escape(self, nextpos):
@@ -414,7 +414,7 @@ class Parser(pdlparser.PDLParser):
                 pos = line.find(b" BROTHER XL2HB;")
             if pos != -1:
                 found = True
-                endian = int(line[pos - 1])
+                endian = line[pos - 1]
                 if endian == 0x29:
                     self.littleEndian(0)
                 elif endian == 0x28:
@@ -740,4 +740,4 @@ class Parser(pdlparser.PDLParser):
                                                  duplexmode,
                                                  colormode))
 
-        return int(self.pagecount)
+        return self.pagecount
