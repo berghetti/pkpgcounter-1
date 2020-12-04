@@ -95,6 +95,7 @@ class Parser(pdlparser.PDLParser):
                 part0 = parts[0]
             else:
                 part0 = ""
+
             if part0 == r"%ADOPrintSettings:":
                 acrobatmarker = True
             elif part0 == "!R!":
@@ -129,6 +130,11 @@ class Parser(pdlparser.PDLParser):
                   and (nbparts > 6):
                 # handle # of copies set by firefox/kprinter/cups (alternate syntax)
                 self.setcopies(pagecount, parts[6])
+            elif (part0 == "<</NumCopies"):
+                #handle driver generic MS from windows 10
+                list(filter(str.isdigit, parts[1]))[0]
+                self.setcopies(pagecount, list(filter(str.isdigit, parts[1]))[0])
+
             elif (part0 == r"%%Page:") or (part0 == r"(%%[Page:"):
                 proceed = True
                 try:
