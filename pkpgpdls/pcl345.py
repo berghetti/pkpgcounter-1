@@ -30,7 +30,7 @@ from . import pdlparser
 from . import pjl
 
 NUL = chr(0x00)
-LINEFEED = chr(0x0a)
+LINEFEED = chr(0x0a)    # '\n'
 FORMFEED = chr(0x0c)
 ESCAPE = chr(0x1b)
 ASCIILIMIT = chr(0x80)
@@ -134,6 +134,7 @@ class Parser(pdlparser.PDLParser):
 
     def endPage(self):
         """Handle the FF marker."""
+        self.logdebug("endPage")
         #self.logdebug("FORMFEED %i at %08x" % (self.pagecount, self.pos-1))
         if not self.hpgl2:
             # Increments page count only if we are not inside an HPGL2 block
@@ -141,7 +142,9 @@ class Parser(pdlparser.PDLParser):
 
     def escPercent(self):
         """Handles the ESC% sequence."""
-        if self.minfile[self.pos: self.pos+7] == r"-12345X":
+        self.logdebug("escPercent")
+        self.logdebug(self.minfile[self.pos: self.pos+7].decode('utf-8'))
+        if self.minfile[self.pos: self.pos+7].decode('utf-8') == r"-12345X":
             #self.logdebug("Generic ESCAPE sequence at %08x" % self.pos)
             self.pos += 7
             buffer = []
@@ -151,6 +154,7 @@ class Parser(pdlparser.PDLParser):
                 buffer.append(char)
                 if char == '"':
                     quotes += 1
+
                 char = chr(self.readByte())
             self.setPageDict("escaped", "".join(buffer))
             #self.logdebug("ESCAPED: %s" % "".join(buffer))
@@ -160,8 +164,10 @@ class Parser(pdlparser.PDLParser):
                 (value, end) = self.getInteger()
                 if end == 'B':
                     self.enterHPGL2()
-                    while self.minfile[self.pos] != ESCAPE:
+
+                    while chr(self.minfile[self.pos]) != ESCAPE:
                         self.pos += 1
+
                     self.pos -= 1
                     return
                 elif end == 'A':
@@ -301,9 +307,11 @@ class Parser(pdlparser.PDLParser):
                     else:
                         #self.logdebug("EndGFX found before StartGFX, ignored.")
                         pass
-            if end == 'A' and (0 <= value <= 3):
+
+            if value != None:
+                if end == 'A' and (0 <= value <= 3):
                 #self.logdebug("StartGFX %i" % value)
-                self.startgfx.append(value)
+                    self.startgfx.append(value)
 
     def escStaroptAmpu(self):
         """Handles the ESC*o ESC*p ESC*t and ESC&u sequences."""
@@ -324,6 +332,7 @@ class Parser(pdlparser.PDLParser):
 
     def newLine(self):
         """Handles new lines markers."""
+        self.logdebug("new line")
         if not self.hpgl2:
             dic = self.pages.get(self.pagecount, None)
             if dic is None:
@@ -341,6 +350,7 @@ class Parser(pdlparser.PDLParser):
         value = None
         while 1:
             char = chr(self.readByte())
+            # self.logdebug("char %s" %char)
             if char in (NUL, ESCAPE, FORMFEED, ASCIILIMIT):
                 self.pos -= 1 # Adjust position
                 return (None, None)
@@ -409,16 +419,17 @@ class Parser(pdlparser.PDLParser):
         self.startgfx = []
         self.endgfx = []
         self.hpgl2 = False
-        self.imagerunnermarker1 = b"\xcd\xca" # Markers for Canon ImageRunner printers
+        self.imagerunnermarker1 = b"\xcd\xca" # Markers for Canon ImageRunner self.logdebugers
         self.imagerunnermarker2 = b"\x10\x02"
         self.isimagerunner = (minfile[:2] == self.imagerunnermarker1)
 
         tags = [ lambda: None] * 256
+        # self.logdebug(ord(LINEFEED))
         tags[ord(LINEFEED)] = self.newLine
         tags[ord(FORMFEED)] = self.endPage
         tags[ord(ESCAPE)] = self.escape
         tags[ord(ASCIILIMIT)] = self.skipByte
-        tags[ord(self.imagerunnermarker1[0])] = self.handleImageRunner
+        tags[self.imagerunnermarker1[0]] = self.handleImageRunner
 
         self.esctags = [ lambda: None ] * 256
         self.esctags[ord('%')] = self.escPercent
@@ -464,35 +475,36 @@ class Parser(pdlparser.PDLParser):
         try:
             try:
                 while 1:
-                    tags[self.readByte()]()
+                    tag = tags[self.readByte()]
+                    tag()
             except IndexError: # EOF ?
                 pass
         finally:
             self.minfile.close()
 
-        self.logdebug("Pagecount: \t\t\t%i" % self.pagecount)
-        self.logdebug("Resets: \t\t\t%i" % self.resets)
-        self.logdebug("Copies: \t\t\t%s" % self.copies)
-        self.logdebug("NbCopiesMarks: \t\t%i" % len(self.copies))
-        self.logdebug("MediaTypes: \t\t\t%s" % self.mediatypesvalues)
-        self.logdebug("NbMediaTypes: \t\t\t%i" % len(self.mediatypesvalues))
-        self.logdebug("MediaSizes: \t\t\t%s" % self.mediasizesvalues)
-        nbmediasizes = len(self.mediasizesvalues)
-        self.logdebug("NbMediaSizes: \t\t\t%i" % nbmediasizes)
-        self.logdebug("MediaSources: \t\t\t%s" % self.mediasourcesvalues)
-        nbmediasourcesdefault = len([m for m in self.mediasourcesvalues if m in ('Default', 'Auto')])
-        nbmediasourcesnotdefault = len(self.mediasourcesvalues) - nbmediasourcesdefault
-        self.logdebug("MediaSourcesDefault: \t\t%i" % nbmediasourcesdefault)
-        self.logdebug("MediaSourcesNOTDefault: \t%i" % nbmediasourcesnotdefault)
-        self.logdebug("Orientations: \t\t\t%s" % self.orientationsvalues)
-        nborientations = len(self.orientationsvalues)
-        self.logdebug("NbOrientations: \t\t\t%i" % nborientations)
-        self.logdebug("StartGfx: \t\t\t%s" % len(self.startgfx))
-        self.logdebug("EndGfx: \t\t\t%s" % len(self.endgfx))
-        nbbacksides = len(self.backsides)
-        self.logdebug("BackSides: \t\t\t%s" % self.backsides)
-        self.logdebug("NbBackSides: \t\t\t%i" % nbbacksides)
-        self.logdebug("IsImageRunner: \t\t\t%s" % self.isimagerunner)
+        # self.logdebug("Pagecount: \t\t\t%i" % self.pagecount)
+        # self.logdebug("Resets: \t\t\t%i" % self.resets)
+        # self.logdebug("Copies: \t\t\t%s" % self.copies)
+        # self.logdebug("NbCopiesMarks: \t\t%i" % len(self.copies))
+        # self.logdebug("MediaTypes: \t\t\t%s" % self.mediatypesvalues)
+        # self.logdebug("NbMediaTypes: \t\t\t%i" % len(self.mediatypesvalues))
+        # self.logdebug("MediaSizes: \t\t\t%s" % self.mediasizesvalues)
+        # nbmediasizes = len(self.mediasizesvalues)
+        # self.logdebug("NbMediaSizes: \t\t\t%i" % nbmediasizes)
+        # self.logdebug("MediaSources: \t\t\t%s" % self.mediasourcesvalues)
+        # nbmediasourcesdefault = len([m for m in self.mediasourcesvalues if m in ('Default', 'Auto')])
+        # nbmediasourcesnotdefault = len(self.mediasourcesvalues) - nbmediasourcesdefault
+        # self.logdebug("MediaSourcesDefault: \t\t%i" % nbmediasourcesdefault)
+        # self.logdebug("MediaSourcesNOTDefault: \t%i" % nbmediasourcesnotdefault)
+        # self.logdebug("Orientations: \t\t\t%s" % self.orientationsvalues)
+        # nborientations = len(self.orientationsvalues)
+        # self.logdebug("NbOrientations: \t\t\t%i" % nborientations)
+        # self.logdebug("StartGfx: \t\t\t%s" % len(self.startgfx))
+        # self.logdebug("EndGfx: \t\t\t%s" % len(self.endgfx))
+        # nbbacksides = len(self.backsides)
+        # self.logdebug("BackSides: \t\t\t%s" % self.backsides)
+        # self.logdebug("NbBackSides: \t\t\t%i" % nbbacksides)
+        # self.logdebug("IsImageRunner: \t\t\t%s" % self.isimagerunner)
 
 #        if self.isimagerunner:
 #            self.logdebug("Adjusting PageCount: +1")
@@ -501,16 +513,16 @@ class Parser(pdlparser.PDLParser):
             self.logdebug("Adjusting PageCount: -1")
             self.pagecount -= 1      # ImageRunner adjustment
         elif self.linesperpage is not None:
-            self.logdebug("Adjusting PageCount: +1")
+            self.logdebug("Adjusting PageCount: +1 linesperpage")
             self.pagecount += 1      # Adjusts for incomplete last page
         elif len(self.startgfx) == len(self.endgfx) == 0:
             if self.resets % 2:
                 if (not self.pagecount) and (nborientations < nbbacksides):
                     self.logdebug("Adjusting PageCount because of backsides: %i" % nbbacksides)
                     self.pagecount = nbbacksides
-                elif nborientations == self.pagecount + 1:
-                    self.logdebug("Adjusting PageCount: +1")
-                    self.pagecount += 1
+                # elif nborientations == self.pagecount + 1:
+                #     self.logdebug("Adjusting PageCount: +1 nborientations")
+                #     self.pagecount += 1
                 elif (self.pagecount > 1) \
                      and (nborientations == self.pagecount - 1):
                     self.logdebug("Adjusting PageCount: -1")
@@ -522,7 +534,8 @@ class Parser(pdlparser.PDLParser):
             self.logdebug("Adjusting PageCount: -1")
             self.pagecount -= 1
 
-        self.pagecount = self.pagecount or nbmediasourcesdefault or nbmediasizes or nborientations or self.resets
+        # self.pagecount = self.pagecount or nbmediasourcesdefault or nbmediasizes or nborientations or self.resets
+        self.pagecount = self.pagecount or nbmediasourcesdefault
 
         if not self.pagecount:
             if self.resets == len(self.startgfx):
@@ -557,6 +570,7 @@ class Parser(pdlparser.PDLParser):
                         pjlcopies = defaultpjlcopies
                     else:
                         pjlcopies = oldpjlcopies
+
                 if page["duplex"]:
                     duplexmode = "Duplex"
                 else:
